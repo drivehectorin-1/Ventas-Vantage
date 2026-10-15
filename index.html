@@ -21,8 +21,8 @@
       </div>
     </div>
     <div class="flex bg-slate-800 rounded-lg p-1 text-xs font-semibold">
-      <button onclick="setRole('Yo (Captador)')" id="btn-role-yo" class="px-3 py-1.5 rounded-md bg-amber-500 text-slate-950 transition">Yo</button>
-      <button onclick="setRole('Socio (Closer)')" id="btn-role-socio" class="px-3 py-1.5 rounded-md text-slate-400 transition">Socio</button>
+      <button onclick="setRole('Hector')" id="btn-role-hector" class="px-3 py-1.5 rounded-md bg-amber-500 text-slate-950 transition">Hector</button>
+      <button onclick="setRole('Leandro')" id="btn-role-leandro" class="px-3 py-1.5 rounded-md text-slate-400 transition">Leandro</button>
     </div>
   </header>
 
@@ -65,10 +65,10 @@
       <div id="leads-list" class="space-y-3"></div>
     </div>
 
-    <!-- SECCIÓN 3: MATCH AUTOMÁTICO Y SOCIO -->
+    <!-- SECCIÓN 3: MATCH AUTOMÁTICO Y CIERRES -->
     <div id="view-match" class="space-y-3 hidden">
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-300">
-        <p class="font-bold text-amber-400 mb-1"><i class="fa-solid fa-handshake"></i> Cruce Inteligente de Cierres</p>
+        <p class="font-bold text-amber-400 mb-1"><i class="fa-solid fa-handshake"></i> Cruce Inteligente de Cierres (Hector & Leandro)</p>
         Aquí aparecen automáticamente los compradores calificados (Contado o Crédito Aprobado) cuyo presupuesto alcanza para las casas que ya grabaron en video.
       </div>
       <div id="match-list" class="space-y-3"></div>
@@ -125,7 +125,7 @@
       <select id="l-stage" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white">
         <option value="pregunto">1. Preguntó por video</option>
         <option value="filtrado">2. Filtrado (Tiene plata / Crédito)</option>
-        <option value="socio">3. Pasa al Socio (Por Cerrar / Visita)</option>
+        <option value="leandro">3. Pasa a Leandro (Por Cerrar / Visita)</option>
         <option value="vendido">4. ¡Cerrado / Vendido!</option>
       </select>
       <textarea id="l-notes" rows="2" placeholder="¿Por cuál video preguntó? ¿Qué zona busca?" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white"></textarea>
@@ -137,7 +137,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAGlEzpmW8D-dtBh8Cf1fig61nOVcHLmmw",
@@ -153,11 +153,25 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    let currentRole = "Yo (Captador)";
+    let currentRole = localStorage.getItem("vantage_role") || "Hector";
     let properties = [];
     let leads = [];
     let currentFilter = "todos";
     let gpsCoords = "";
+
+    window.setRole = (role) => {
+      currentRole = role;
+      localStorage.setItem("vantage_role", role);
+      document.getElementById("btn-role-hector").className = role === "Hector"
+        ? "px-3 py-1.5 rounded-md bg-amber-500 text-slate-950 transition"
+        : "px-3 py-1.5 rounded-md text-slate-400 transition";
+      document.getElementById("btn-role-leandro").className = role === "Leandro"
+        ? "px-3 py-1.5 rounded-md bg-amber-500 text-slate-950 transition"
+        : "px-3 py-1.5 rounded-md text-slate-400 transition";
+    };
+
+    // Inicializar botón activo según quién lo dejó marcado en su celular
+    window.setRole(currentRole);
 
     signInAnonymously(auth).then(() => {
       document.getElementById("sync-status").innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> En vivo (Nube activa)';
@@ -179,12 +193,6 @@
         renderMatch();
       });
     }
-
-    window.setRole = (role) => {
-      currentRole = role;
-      document.getElementById("btn-role-yo").className = role.includes("Yo") ? "px-3 py-1.5 rounded-md bg-amber-500 text-slate-950 transition" : "px-3 py-1.5 rounded-md text-slate-400 transition";
-      document.getElementById("btn-role-socio").className = role.includes("Socio") ? "px-3 py-1.5 rounded-md bg-amber-500 text-slate-950 transition" : "px-3 py-1.5 rounded-md text-slate-400 transition";
-    };
 
     window.switchTab = (tab) => {
       ["calle", "compradores", "match"].forEach(t => {
@@ -261,6 +269,13 @@
 
     window.filterProps = (f) => { currentFilter = f; renderProps(); };
 
+    function formatAuthor(by) {
+      if (!by) return "Hector";
+      if (by.includes("Yo")) return "Hector";
+      if (by.includes("Socio")) return "Leandro";
+      return by;
+    }
+
     function renderProps() {
       const box = document.getElementById("props-list");
       const list = currentFilter === "todos" ? properties : properties.filter(p => p.status === currentFilter);
@@ -276,12 +291,16 @@
       };
       box.innerHTML = list.map(p => {
         const cleanPhone = p.phone.replace(/\D/g, "");
-        const msg = encodeURIComponent(`Hola ${p.owner}, vi su propiedad en venta en ${p.zone}. Trabajo filtrando compradores al contado o con crédito aprobado y grabando un video con usted para venderla rápido sin llevarle curiosos. ¿Podemos conversar?`);
+        const author = formatAuthor(p.by);
+        const msg = encodeURIComponent(`Hola ${p.owner}, soy ${currentRole}. Vi su propiedad en venta en ${p.zone}. Trabajo filtrando compradores al contado o con crédito aprobado y grabando un video con usted para venderla rápido sin llevarle curiosos. ¿Podemos conversar?`);
         return `
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 shadow">
           <div class="flex justify-between items-start">
             <div>
-              <span class="text-[11px] px-2.5 py-0.5 rounded-full font-bold ${badge[p.status]}">${p.status.replace("_"," ").toUpperCase()}</span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[11px] px-2.5 py-0.5 rounded-full font-bold ${badge[p.status]}">${p.status.replace("_"," ").toUpperCase()}</span>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-semibold">Captó: ${author}</span>
+              </div>
               <h3 class="font-bold text-base mt-1">${p.zone}</h3>
               <p class="text-xs text-slate-400"><i class="fa-solid fa-user"></i> ${p.owner} • ${p.price ? '$'+p.price.toLocaleString() : 'Sin precio'}</p>
             </div>
@@ -312,20 +331,25 @@
       }
       box.innerHTML = leads.map(l => {
         const cleanPhone = l.phone.replace(/\D/g, "");
+        const author = formatAuthor(l.by);
+        const stageLabel = (l.stage === "socio" || l.stage === "leandro") ? "CON LEANDRO (CIERRE)" : l.stage.toUpperCase();
         return `
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2.5">
           <div class="flex justify-between">
             <div>
-              <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 font-bold">${l.pay}</span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 font-bold">${l.pay}</span>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-semibold">Registró: ${author}</span>
+              </div>
               <h3 class="font-bold text-base mt-1">${l.name}</h3>
-              <p class="text-xs text-slate-400">Presupuesto: <b>$${(l.budget||0).toLocaleString()}</b> • Etapa: <b>${l.stage.toUpperCase()}</b></p>
+              <p class="text-xs text-slate-400">Presupuesto: <b>$${(l.budget||0).toLocaleString()}</b> • Etapa: <b>${stageLabel}</b></p>
             </div>
             <button onclick="removeDoc('leads','${l.id}')" class="text-slate-600 hover:text-red-400 text-sm"><i class="fa-solid fa-trash"></i></button>
           </div>
           ${l.notes ? `<p class="text-xs bg-slate-950 p-2 rounded-lg text-slate-300">${l.notes}</p>` : ""}
           <div class="grid grid-cols-3 gap-1 text-[10px] font-bold">
             <button onclick="changeLeadStage('${l.id}','filtrado')" class="py-1.5 rounded bg-slate-800">✅ Filtrado</button>
-            <button onclick="changeLeadStage('${l.id}','socio')" class="py-1.5 rounded bg-amber-600 text-slate-950">🔥 Pasar a Socio</button>
+            <button onclick="changeLeadStage('${l.id}','leandro')" class="py-1.5 rounded bg-amber-600 text-slate-950">🔥 Pasar a Leandro</button>
             <button onclick="changeLeadStage('${l.id}','vendido')" class="py-1.5 rounded bg-emerald-600 text-white">🏆 Vendido</button>
           </div>
           <div class="flex gap-2 pt-1">
@@ -338,7 +362,7 @@
 
     function renderMatch() {
       const box = document.getElementById("match-list");
-      const readyLeads = leads.filter(l => l.pay !== "Sin Calificar" || l.stage === "socio" || l.stage === "filtrado");
+      const readyLeads = leads.filter(l => l.pay !== "Sin Calificar" || l.stage === "socio" || l.stage === "leandro" || l.stage === "filtrado");
       const activeProps = properties.filter(p => p.status === "en_redes" || p.status === "por_grabar");
       if (!readyLeads.length || !activeProps.length) {
         box.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">Cuando tengas casas en "Grabar/Redes" y compradores con presupuesto calificado, aquí verás los cruces automáticos para cerrar.</div>`;
@@ -349,7 +373,7 @@
         const matches = activeProps.filter(p => !p.price || !l.budget || p.price <= l.budget * 1.15);
         matches.forEach(p => {
           const cleanPhone = l.phone.replace(/\D/g, "");
-          const msg = encodeURIComponent(`Hola ${l.name}, tengo disponible la propiedad en ${p.zone} (${p.price ? '$'+p.price.toLocaleString() : 'excelente precio'}) de trato directo con el propietario. ¿Coordinamos visita?`);
+          const msg = encodeURIComponent(`Hola ${l.name}, te saluda ${currentRole}. Tengo disponible la propiedad en ${p.zone} (${p.price ? '$'+p.price.toLocaleString() : 'excelente precio'}) de trato directo con el propietario. ¿Coordinamos visita?`);
           html += `
           <div class="bg-slate-900 border border-amber-500/40 rounded-2xl p-3.5 space-y-2">
             <div class="flex justify-between items-center text-xs">
